@@ -11,6 +11,7 @@ BLUE="$(tput setaf 4 2>/dev/null || printf '')"
 GREEN="$(tput setaf 2 2>/dev/null || printf '')"
 NO_COLOR="$(tput sgr0 2>/dev/null || printf '')"
 SED_INPLACE=$(if [[ "$(uname)" == "Darwin" ]]; then echo "-i ''"; else echo "-i"; fi)
+PREFIX="$(basename $PWD)"
 
 info() {
   printf '%s\n' "${BLUE}> ${NO_COLOR} $*"
@@ -48,8 +49,8 @@ check_dependencies() {
 
 check_existing_db_volume() {
 	info "checking for an existing docker db volume"
-	if docker volume inspect listmonk_listmonk-data >/dev/null 2>&1; then
-		error "listmonk-data volume already exists. Please use docker compose down -v to remove old volumes for a fresh setup of PostgreSQL."
+	if docker volume inspect ${PREFIX}_listmonk-data >/dev/null 2>&1; then
+		error "${PREFIX}listmonk-data volume already exists. Please use docker compose down -v to remove old volumes for a fresh setup of PostgreSQL."
 		exit 1
 	fi
 }
@@ -84,12 +85,12 @@ generate_password(){
 
 get_config() {
 	info "fetching config.toml from listmonk repo"
-	download https://raw.githubusercontent.com/knadh/listmonk/master/config.toml.sample config.toml
+	download https://raw.githubusercontent.com/jcm-shove-it/listmonk/master/config.toml.sample config.toml
 }
 
 get_containers() {
 	info "fetching docker-compose.yml from listmonk repo"
-	download https://raw.githubusercontent.com/knadh/listmonk/master/docker-compose.yml docker-compose.yml
+	download https://raw.githubusercontent.com/jcm-shove-it/listmonk/master/docker-compose.yml docker-compose.yml
 }
 
 modify_config(){
@@ -98,7 +99,7 @@ modify_config(){
 
 	info "modifying config.toml"
 	# Replace `db.host=localhost` with `db.host=db` in config file.
-	sed $SED_INPLACE "s/host = \"localhost\"/host = \"listmonk_db\"/g" config.toml
+	sed $SED_INPLACE "s/host = \"localhost\"/host = \"${PREFIX}_db\"/g" config.toml
 	# Replace `db.password=listmonk` with `db.password={{db_password}}` in config file.
 	# Note that `password` is wrapped with `\b`. This ensures that `admin_password` doesn't match this pattern instead.
 	sed $SED_INPLACE "s/\bpassword\b = \"listmonk\"/password = \"$db_password\"/g" config.toml
@@ -112,7 +113,7 @@ modify_config(){
 run_migrations(){
 	info "running migrations"
 	docker compose up -d db
-	while ! is_healthy listmonk_db; do sleep 3; done
+	while ! is_healthy ${PREFIX}_db; do sleep 3; done
 	docker compose run --rm app ./listmonk --install
 }
 
@@ -125,7 +126,7 @@ show_output(){
 	info "finishing setup"
 	sleep 3
 
-	if is_running listmonk_db && is_running listmonk_app
+	if is_running ${PREFIX}_db && is_running ${PREFIX}_app
 	then completed "Listmonk is now up and running. Visit http://localhost:9000 in your browser."
 	else
 		error "error running containers. something went wrong."
